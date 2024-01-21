@@ -15,8 +15,9 @@ Start with traffic lights as getting labelled data for these is probably going t
 ### Gathering labelled traffic light data:
 Be very tolerant of false positives, and very stringent with false negatives. It's better to not restrict the scope of the labelled data to whatever the CV traffic light finder can find -rather get lots and I can manually sift through and remove.
 
-  1) threshold the image using red, amber and green -red higher, amber lower, green bottom. Start by assuming the camera is always vertically aligned with the y-axis.
+  1) Try converting the colour to HSV colour space
+  2) threshold the image using red, amber and green -red higher, amber lower, green bottom. Start by assuming the camera is always vertically aligned with the y-axis.
     a) Once a red light is found, skip ahead some frames and see if it turns amber then green. If it does assume it's a traffic light.
-  2) Using contours, erosion, dilation to detect a box surrounding all three lights.
-  3) Print out frames of traffic lights as a series of JPG and I can cycle through and delete any bad ones manually.
+  3) Using contours, erosion, dilation to detect a box surrounding all three lights.
+  4) Print out frames of traffic lights as a series of JPG and I can cycle through and delete any bad ones manually.
 
