@@ -20,3 +20,19 @@ Be very tolerant of false positives, and very stringent with false negatives. It
   2) Using contours, erosion, dilation to detect a box surrounding all three lights.
   3) Print out frames of traffic lights as a series of JPG and I can cycle through and delete any bad ones manually.
 
+
+## 21/01/2024: Format of the GoPro 360 video file
+The 360 video file contains 6 streams of data. These are:
+   1) video track (mostly front)
+   2) video track (mostly back)
+   3) audio track
+   4) audio track? PCM -pulse code modulation.
+   5) telemetry/metadata track
+   6) timecode track. This might be timecodes for data measurements.
+
+The python library `gpmf` and `ffmpeg-python` can be used to extract the various streams from the video file.
+
+We have front video, back video and various quantities from the video like speed, lat/lon, wetness, acceleration, magnetic field strength & tilt.
+
+This is useful for docs: https://github.com/gopro/gpmf-parser
+
