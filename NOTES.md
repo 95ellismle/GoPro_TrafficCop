@@ -23,8 +23,8 @@ Be very tolerant of false positives, and very stringent with false negatives. It
 
 ## 21/01/2024: Format of the GoPro 360 video file
 The 360 video file contains 6 streams of data. These are:
-   1) video track (mostly front)
-   2) video track (mostly back)
+   1) video track (front horizontal strip)
+   2) video track (rear vertical strip)
    3) audio track
    4) audio track? PCM -pulse code modulation.
    5) telemetry/metadata track
@@ -36,3 +36,30 @@ We have front video, back video and various quantities from the video like speed
 
 This is useful for docs: https://github.com/gopro/gpmf-parser
 
+
+# 03/02/2024: Format of individual GoPro frames
+We have 2 streams of video, front-ish and rear-ish. The full spherical view of the 3D world is split into 10 images:
+front, front-left, front-right, rear-left, rear-right
+rear, rear-top, rear-bottom, front-top, front-bottom
+
+
+*front*
+The front-ish frames come in a strip that wraps horizontally around you.
+Imagine you're wearing cyclops goggles that block your view upwards and downwards.
+
+E.g: in the graphic below imagine you are the dot and we are looking downwards at your head.
+     The lines around you is what the first stream captures.
+                /-----\
+                \  .  /
+
+*rear*
+The rear-ish frames come in a strip that wraps vertically around you. It fills the strip left over from the first stream (see front).
+Imagine you are lying on your side and you are facing backwards with cyclops goggles on (as in the front strip). The strip you see
+running top to bottom is what is captured.
+
+E.g: in the graphic below imagine you are the line, lying on your side and the cross is your head.
+     The vertical line shows the strip you can see -it wraps in a C shape vertically.
+
+       |
+       +-----
+       |
