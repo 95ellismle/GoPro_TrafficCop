@@ -1,25 +1,26 @@
 import av
 import matplotlib.pyplot as plt
-import numpy as np
 
 from dataclasses import dataclass
+
+from src.data_types import Image
 
 
 @dataclass
 class Img360:
     # From stream 1
-    rear_left: None
-    front_left: None
-    front: None
-    front_right: None
-    rear_right: None
+    rear_left: Image
+    front_left: Image
+    front: Image
+    front_right: Image
+    rear_right: Image
 
     # From stream 2
-    front_top: None
-    rear_top: None
-    rear: None
-    rear_bottom: None
-    front_bottom: None
+    front_top: Image
+    rear_top: Image
+    rear: Image
+    rear_bottom: Image
+    front_bottom: Image
 
     def __init__(self,
                  frame_fronts: av.video.frame.VideoFrame,
@@ -33,7 +34,7 @@ class Img360:
         Returns:
             Just sets variables
         """
-        img = np.array(frame_fronts.to_image())
+        img = Image(frame_fronts.to_image())
 
         self.rear_left = img[:, :688]
         self.front_left = img[:, 688:1376]
@@ -42,11 +43,7 @@ class Img360:
         self.rear_right = img[:, -688:]
 
         # We want to rotate 90 deg and flip
-        img = np.swapaxes(
-                np.array(frame_rears.to_image()),
-                0,
-                1
-        )[::-1]
+        img = Image(frame_rears).T[::-1]
 
         self.front_top = img[:688]
         self.rear_top = img[688:1376]

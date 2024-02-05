@@ -1,4 +1,4 @@
-from src.labelling.traffic_lights.detect import (
+from src.cv_detect.traffic_lights.detect import (
     detect_light_circles
 )
 

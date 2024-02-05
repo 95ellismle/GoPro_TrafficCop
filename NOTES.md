@@ -63,3 +63,8 @@ E.g: in the graphic below imagine you are the line, lying on your side and the c
        |
        +-----
        |
+
+# 04/02/2024: Picking out traffic lights
+1) Find red, yellow green circles. This can be done with HSV filtering, erosion/dilation to clean up and findContours. Compare area of contour to area of the minEnclosingCircle.
+
+2) Find corner features near each light. Probably first threshold black-ish objects (the traffic light box). Can also use FLANN: https://docs.opencv.org/4.x/db/d27/tutorial_py_table_of_contents_feature2d.html to find lights (though they may be rotated etc...).
