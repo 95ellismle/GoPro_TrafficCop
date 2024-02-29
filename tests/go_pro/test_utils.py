@@ -5,17 +5,11 @@ import pytest
 
 from src.go_pro.utils import split_360
 
-from tests.fixtures import FIXTURES_PATH
+from tests.fixtures import red_amber_traffic_light_360_video
 
 
-@pytest.fixture
-def red_amber_traffic_light_360():
-    with av.open(FIXTURES_PATH / "traffic_lights.360") as container:
-        yield container
-
-
-def test_split_360(red_amber_traffic_light_360):
-    img_360 =next(split_360(red_amber_traffic_light_360))
+def test_split_360(red_amber_traffic_light_360_video):
+    img_360 =next(split_360(red_amber_traffic_light_360_video))
 
     assert img_360.front.shape == (1344, 1344, 3)
     assert np.isclose(np.mean(img_360.front), 106.59712294205877)

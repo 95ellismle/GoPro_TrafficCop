@@ -2,35 +2,14 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.data_types import Image
-from src.cv_detect.traffic_lights.data_types import (
+from src.data_types import (
+    Circle,
     Color,
-    HSV,
-    MinMax,
     Combine,
+    HSV,
+    Image,
+    MinMax,
 )
-
-
-COLOR_THRESHOLDS = {
-    Color.RED: {
-        Combine.AND: {
-            Combine.OR: {
-                MinMax.MAX: {
-                    HSV.HUE: 30
-                },
-                MinMax.MIN: {
-                    HSV.HUE: 150,
-                },
-            },
-            MinMax.MIN: {
-                Combine.AND: {
-                    HSV.SATURATION: 110,
-                    HSV.LIGHTNESS: 220,
-                },
-            }
-        }
-    },
-}
 
 
 def apply_threshold(img_arr: np.ndarray,
@@ -82,3 +61,19 @@ def apply_threshold(img_arr: np.ndarray,
             else:
                 raise ValueError(f"HSV must come after MinMax: {thresholds}")
 
+
+def draw_circles(img: Image,
+                 circles: tuple[Circle, ...],
+                 *args,
+                 **kwargs) -> Image:
+    """Draws some circles on an image array -but doesn't show the image"""
+    img_arr = img.arr.copy()
+    if len(args) < 1:
+        kwargs['color'] = kwargs.get('color', (255, 255, 0))
+    if len(args) < 2:
+        kwargs['thickness'] = kwargs.get('thickness', 6)
+
+    for icircle, circle in enumerate(circles):
+        cv2.circle(img_arr, circle.center, int(circle.radius), *args, **kwargs)
+
+    return Image(img_arr)

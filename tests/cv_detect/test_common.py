@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from src.cv_detect.traffic_lights.data_types import (
+from src.data_types import (
     HSV,
     MinMax,
     Combine,
