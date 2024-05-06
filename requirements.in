@@ -5,3 +5,9 @@ opencv-python
 pyav
 pytest
 ipdb
+playwright
+pip>=24.0
+torch
+torchvision
+ultralytics
+click

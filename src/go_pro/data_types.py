@@ -8,6 +8,8 @@ from src.data_types import Image
 
 @dataclass
 class Img360:
+    frame_number: int
+
     # From stream 1
     rear_left: Image
     front_left: Image
@@ -51,7 +53,7 @@ class Img360:
         self.rear_bottom = img[2720:-688]
         self.front_bottom = img[-688:]
 
-    def show_all_images(self):
+    def show_all(self):
         """Plot all images on 2 axes"""
         f, ((a1, a2, a3), (a4, a5, a6)) = plt.subplots(2, 3)
         a1.imshow(self.front_top)

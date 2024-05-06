@@ -8,10 +8,67 @@ from enum import Enum
 from dataclasses import dataclass
 
 
-class Color(Enum):
+tuple_3_uint = tuple[np.uint8, np.uint8, np.uint8]
+
+
+class Color:
+    name: str | None
+    rgb: tuple_3_uint
+
+    _color_definitions = {
+        "black": (0, 0, 0),
+        "bright red": (255, 0, 0),
+        "dark red": (100, 0, 0),
+        "bright green": (0, 255, 0),
+        "dark green": (0, 80, 0),
+        "bright blue": (0, 0, 255),
+        "navy": (0, 0, 100),
+        "yellow": (255, 255, 0),
+        "pink": (255, 0, 255),
+        "teal": (0, 255, 255),
+        "orange": (255, 128, 0),
+        "light_gray": (100, 100, 100),
+        "dark_gray": (50, 50, 50),
+        "white": (200, 200, 200),
+    }
+    _color_defs_numpy = np.array([np.array(v) for v in _color_definitions.values()])
+    _color_defs_keys = list(_color_definitions.keys())
+
+    def __init__(self,
+                 rgb: tuple_3_uint | None = None,
+                 name: str | None = None):
+        if name is not None:
+            assert rgb is None, "Please only provide the name of the color or the RGB tuple"
+            if name not in self._color_definitions:
+                raise ValueError(f"Cannot find color {name} in my definition. Please add it or use one of the following:"
+                                 "\n\t* " +  "\n\t* ".join(_color_definitions.keys()))
+            rgb = self._color_definitions[name]
+
+        elif rgb is not None:
+            assert isinstance(rgb, np.ndarray), "Please input rgb as a 3-tuple numpy array"
+            assert rgb.shape==(3,), "Please input the rgb 3-tuple as an np.ndarray of shape (3,)"
+            distances = np.linalg.norm(self._color_defs_numpy - np.array(rgb), axis=1)
+            name = self._color_defs_keys[np.argmin(distances)]
+
+        else:
+            raise ValueError("Please provide either rgb or name of the color")
+
+        self.rgb = rgb
+        self.name = name
+
+
+class PredictedColor(Color):
+    certainty: float
+    def __init__(self, certainty: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.certainty = certainty
+
+
+class ColorEnum(Enum):
     RED = 0
     AMBER = 1
     GREEN = 2
+    BLACK = 3
 
 class HSV(Enum):
     HUE =  0
@@ -30,6 +87,14 @@ class Combine(Enum):
 class Circle:
     center: tuple[float, float]
     radius: float
+
+@dataclass
+class Rectangle:
+    """pt1 is the point of one corner (in normalised coords).
+       pt2 is the point of the opposite corner (normalised coords)
+    """
+    pt1: tuple[float, float]
+    pt2: tuple[float, float]
 
 class Image:
     """Container for image data.
