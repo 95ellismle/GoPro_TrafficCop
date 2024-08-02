@@ -17,7 +17,7 @@ def split_360(
         img: The 360 image to split
         min_time: Time to seek to before iterating over frames.
                   Unit of time is given in streams.video[0].time_base.
-                  On GoPro it seems to be `Fraction(1, 90_000)`
+                  On GoPro it seems to be `1 / 90_000`
 
     Returns:
         <np.ndarray, np.ndarray> front, rear image

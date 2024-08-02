@@ -15,5 +15,3 @@ while True:
     i += 1
     cv2.imshow(f"frame_{i}", frame)
     cv2.waitKey(0)
-
-
