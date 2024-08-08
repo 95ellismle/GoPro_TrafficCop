@@ -1,0 +1,398 @@
+import cv2 as cv
+from datetime import(datetime as datetime_type)
+from pathlib import Path
+import numpy as np
+
+from src.data_types import PredictedColor, Image
+from src.ml_detect.base import BaseObject, predict
+from src.ml_detect.constants import NUM_PLATE_MODEL
+
+from src.cv_detect.colors import (
+    segment_colors,
+    get_color_segmentations,
+    create_color_pallette
+)
+
+COUNT = 0
+ASPECT_RATIOS = []
+
+
+class Character(BaseObject):
+    value: str | None = None
+
+
+class NumberPlate(BaseObject):
+    # Derived quantities
+    _characters: tuple[str] | None = None
+    _detected_characters: list | None = None
+    _is_good: bool = False
+    _number_plate_color: str | None = None
+    _number_plate_color_pallette: list[tuple[int, int, int]] | None = None
+    _light_color_pallette: list[tuple[int, int, int]] | None = None
+
+    @property
+    def characters(self):
+        import ipdb; ipdb.set_trace()
+
+    @property
+    def light_color_pallette(self):
+        """Get the color pallete in the center of the image and remove any very dark colors"""
+        global COUNT
+        if self._light_color_pallette is not None:
+            return self._light_color_pallette
+
+        img = self.frame.copy()
+
+        # Zoom into the center and get the color pallette for it
+        shape = img.shape
+        shape_d = [int(0.15*i) for i in shape]
+        img = img[shape_d[0]:shape[0]-shape_d[0],
+                  shape_d[1]:shape[1]-shape_d[1]]
+
+        # Remove dark colors
+        img = cv.cvtColor(img, cv.COLOR_RGB2LAB)
+        img[img[:, :, 0] < 40] = [0, 128, 128]
+        img = cv.cvtColor(img, cv.COLOR_LAB2RGB)
+
+        # Do some color segmentation with Kmedian clustering
+        Ncol = 8
+        _, colors = get_color_segmentations(img,
+                                            Ncol,
+                                            do_median=True,
+                                            min_clust_size=0.02)
+
+        self._light_color_pallette = colors
+        hsv_colors = cv.cvtColor(colors.reshape((1, Ncol, 3)), cv.COLOR_RGB2HSV)
+        black = (255 - colors.max(axis=1)) / 255
+        for i in range(Ncol):
+            if black[i] > 0.9:
+                hsv_colors[0][i] = [0,0,0]
+        self._light_color_pallette = cv.cvtColor(hsv_colors, cv.COLOR_HSV2RGB)[0]
+
+        return self._light_color_pallette
+
+    @property
+    def number_plate_color(self):
+        """The number plate is either yellow or white. This function will get which one the number plate is.
+
+        Steps:
+            1) Zoom into center
+            2) Segment colors to 4
+            3) Check the color pallette for any yellow colors, if there are some then set color to yellow. If not then use white.
+        """
+        if self._number_plate_color is not None:
+            return self._number_plate_color
+
+        # Find any yellow colors
+        self._number_plate_color = "yellow"
+        yellow_color_pallette = self.number_plate_color_pallette
+        self._number_plate_color_pallette = None
+
+        if len(yellow_color_pallette) > 0:
+            self._number_plate_color = "yellow"
+        else:
+            self._number_plate_color = "white"
+
+        return self._number_plate_color
+
+    @property
+    def number_plate_color_pallette(self):
+        """Get the color pallette for picking out the number plate"""
+        if self._number_plate_color_pallette is not None:
+            return self._number_plate_color_pallette
+
+        colors = self.light_color_pallette[:]
+
+        Ncol = len(colors)
+        hsv_colors = cv.cvtColor(colors.reshape((1, Ncol, 3)), cv.COLOR_RGB2HSV)
+        black = (255 - colors.max(axis=1)) / 255
+        yellow = (1 - (colors[:, 2]/255) - black) / (1 - black)
+        yellow[yellow != yellow] = 0.0
+        grey = 1 - (np.std(colors, axis=1) / 120.2)
+
+        color_pallette = [[]]
+        # Get the most yellow colors
+        if self.number_plate_color == "yellow":
+            for i in range(Ncol):
+                if yellow[i] < 0.4:  # Remove colors that aren't substantially yellow
+                    continue
+                elif grey[i]  > 0.95:  # Remove any gray colors
+                    continue
+                # Remove colors with a non-yellow hue
+                elif hsv_colors[0][i][0] > 100 or hsv_colors[0][i][1] < 80:
+                    continue
+                color_pallette[0].append(hsv_colors[0][i])
+
+        # Just get the whitest color
+        elif self.number_plate_color == "white":
+            color_score = (  (0.3*(1-black))
+                           + (0.3*((1-hsv_colors[0,:,1]) / 255))
+                           + (0.4*grey)
+            )
+            ordered = sorted(zip(color_score, hsv_colors[0]),
+                            key=lambda i: i[0],
+                            reverse=True)
+            for score, color in ordered:
+                if score > 0.85:
+                    color_pallette[0].append(color)
+
+            if len(color_pallette[0]) == 0:
+                color_pallette = [[ordered[0][1]]]
+
+        else:
+            raise NotImplementedError("Only yellow and white number plates are handled.")
+
+        # Convert from HSV to RGB
+        color_pallette = np.array(color_pallette)
+        if len(color_pallette[0]) == 0:
+            self._number_plate_color_pallette = np.array(color_pallette[0])
+            return self._number_plate_color_pallette
+        self._number_plate_color_pallette = cv.cvtColor(color_pallette,
+                                                        cv.COLOR_HSV2RGB)[0]
+        return self._number_plate_color_pallette
+
+    def remove_non_background(self):
+        """Get colors that are pretty close to the color pallette"""
+        global ASPECT_RATIOS
+        self.frame = Image(
+            cv.bilateralFilter(self.frame.arr,
+                               d=9,
+                               sigmaColor=50,
+                               sigmaSpace=50)
+        )
+
+        mask = np.zeros(self.frame.shape, dtype=np.uint8)
+        frame_copy = self.frame.copy()
+        if self.number_plate_color == 'yellow':
+            colors = self.number_plate_color_pallette
+            hsv_colors = cv.cvtColor(np.array([colors]), cv.COLOR_RGB2HSV)[0]
+            img = cv.cvtColor(self.frame.arr, cv.COLOR_RGB2HSV)
+            for color in hsv_colors:
+                #dist = np.linalg.norm(self.frame.arr - color, axis=2)
+                dist = img - color
+                dist = (
+                        (0.7  * dist[:, :, 0])
+                      + (0.15 * dist[:, :, 1])
+                      + (0.05 * dist[:, :, 2])
+                )
+                mask[dist < 14] = [255, 255, 255]
+            gray = 1 - (np.std(frame_copy, axis=2) / 120.2)
+            yellow = 1 - (frame_copy[:, :, :2].std(axis=2) / 127.5)
+            mask[gray > 0.85] = [0, 0, 0]
+            mask[yellow < 0.8] = [0, 0, 0]
+            if mask.sum() == 0:
+                mask = np.ones_like(self.frame.shape) * 255
+
+        else:
+            ...
+
+        if self.number_plate_color == 'yellow':
+            global COUNT
+            out_dir = Path("/Users/mattellis/Projects/GoProCam/storage/img/num_plate_tidying/out");  out_dir.mkdir(exist_ok=True)
+            filepath = out_dir / f"{COUNT}.jpg"
+            COUNT += 1
+
+
+            pts = cv.findNonZero(mask[:,:,0])
+            vx,vy,x,y = cv.fitLine(pts, cv.DIST_L2,0,0.01,0.01)
+            # import ipdb; ipdb.set_trace()
+            min_area_rect = cv.minAreaRect(pts)
+            rotated_bounding_box = np.int0(cv.boxPoints(min_area_rect))
+            new_mask = np.zeros(self.frame.shape[:2], dtype=np.uint8)
+            cv.drawContours(new_mask, [rotated_bounding_box], 0, 255, -1)
+            new_mask = cv.dilate(new_mask, np.ones((3,3),dtype=np.uint8)).astype(np.bool_)
+            final = self.frame.copy()
+            final[~new_mask] = [0,0,0]
+
+            grey = cv.cvtColor(final[:], cv.COLOR_RGB2GRAY)
+
+            closed = cv.cvtColor(final[:], cv.COLOR_RGB2GRAY)
+            closed = cv.equalizeHist(closed)
+
+            clahe = cv.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
+            final = cv.cvtColor(final[:], cv.COLOR_RGB2GRAY)
+            final = clahe.apply(final)
+
+
+            final = cv.adaptiveThreshold(final,
+                                         255,
+                                         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                         cv.THRESH_BINARY,
+                                         15,
+                                         7)
+            grey = cv.adaptiveThreshold(grey,
+                                         255,
+                                         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                         cv.THRESH_BINARY,
+                                         15,
+                                         7)
+            closed = cv.adaptiveThreshold(closed,
+                                         255,
+                                         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                         cv.THRESH_BINARY,
+                                         15,
+                                         7)
+
+            final = cv.cvtColor(final, cv.COLOR_GRAY2RGB)
+            closed = cv.cvtColor(closed, cv.COLOR_GRAY2RGB)
+            grey = cv.cvtColor(grey, cv.COLOR_GRAY2RGB)
+
+
+            cv.drawContours(self.frame.arr,
+                            [rotated_bounding_box],
+                            0,
+                            (0, 255, 0),
+                            1)
+
+            Image(
+                np.vstack((
+                    np.hstack((self.frame.arr, grey)),
+                    np.hstack((closed, final)),
+                ))
+            ).save(filepath)
+            # import ipdb; ipdb.set_trace()
+
+    @property
+    def is_good(self):
+        """Check if the image has:
+            * a proportionally large rectangle
+            * yellow or white background for the rectangle
+            * black marks in the center of the rectangle
+        """
+        new_img = self.remove_non_background()
+        return
+        out_img[self.frame.shape[0]:] = new_img
+
+
+        frame_dir = save_dir / "orig"; frame_dir.mkdir(exist_ok=True)
+        counter = 0
+        filepath = frame_dir / f"{counter}.jpg"
+
+        new_img = segment_colors(self.frame.arr, 3)
+        out_img[self.frame.shape[0]:, :self.frame.shape[1]] = new_img
+
+        new_img = segment_colors(self.frame.arr, 5)
+        out_img[:self.frame.shape[0], self.frame.shape[1]:] = new_img
+
+        new_img = segment_colors(self.frame.arr, 7)
+        out_img[self.frame.shape[0]:, self.frame.shape[1]:] = new_img
+        seg_dir = save_dir / "segment_colors_357_median"; seg_dir.mkdir(exist_ok=True)
+
+        Image(out_img).save(seg_dir / filename)
+
+        return
+
+        new_img = self.remove_non_background(new_img)
+        out_img[self.frame.shape[0]:] = new_img
+        bckgrnd_dir = save_dir / "remove_background"; bckgrnd_dir.mkdir(exist_ok=True)
+        Image(out_img).save(bckgrnd_dir / filename)
+
+
+        threshold = cv.cvtColor(new_img, cv.COLOR_RGB2GRAY)
+        threshold = cv.adaptiveThreshold(threshold,
+                                         255,
+                                         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                         cv.THRESH_BINARY,
+                                         15,
+                                         8)
+        thresh_dir = save_dir / "threshold"; thresh_dir.mkdir(exist_ok=True)
+        Image(threshold).save(thresh_dir / filename)
+
+        number_plates = []
+        contours, hierachy = cv.findContours(threshold, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        frame_copy = self.frame.copy()
+        for i, cont in enumerate(contours):
+            area = cv.contourArea(cont)
+            if area < 400:
+                continue
+
+            val = 100 + 5*i
+            if val > 255: val = 255
+            cv.drawContours(frame_copy, [cont], -1, (0, val, 255 - val), 1)
+        cont_dir = save_dir / "contours"; cont_dir.mkdir(exist_ok=True)
+        Image(frame_copy).save(cont_dir / filename)
+
+        frame_area = self.frame.shape[0] * self.frame.shape[1]
+        min_dim, max_dim = min(self.frame.shape[:2]), max(self.frame.shape[:2])
+        mask = np.ones(self.frame.shape[:2], dtype=np.uint8) * 255
+        all_contours = []
+
+        # Find largest contour that ticks all the boxes.
+        #   We don't check for color and we should
+        #   We could use some combination of scores (largest average of area + good color + rectangleyness)
+        for cont in contours:
+            rect = cv.minAreaRect(cont)
+            rect_area = rect[1][0] * rect[1][1]
+            area = cv.contourArea(cont)
+            if (area < 400
+                or rect_area < 400
+                or (area > frame_area * 0.99)): continue
+            if area / rect_area < 0.4: continue
+            min_rect_dim, max_rect_dim = min(rect[1]), max(rect[1])
+
+            if (min_rect_dim > (0.99 * min_dim)
+                or  max_rect_dim > (0.99 * max_dim)):
+                continue
+
+            all_contours.append((area, cont))
+
+        if len(all_contours) < 1:
+            self._is_good = False
+            return self._is_good
+
+        self._is_good = True
+
+        max_contour = max(all_contours)[1]
+        cv.drawContours(mask, [max_contour], -1, 0, -1)
+        mask_dir = save_dir / "mask"; mask_dir.mkdir(exist_ok=True)
+        Image(mask).save(mask_dir / filename)
+
+        new_frame = self.frame.arr[:]
+        new_frame[mask.astype(np.bool_)] = [0,0,0]
+        final = save_dir / "final"; final.mkdir(exist_ok=True)
+        Image(new_frame).save(final / filename)
+        return self._is_good
+
+
+class Car(BaseObject):
+    # Derived quantities
+    _number_plate: str | None = None
+
+    # is_moving: bool | None = None
+    # color: PredictedColor | None
+    # make: str
+    # datetime: datetime_type | None = None
+    # latitude: float | None = None
+    # longitude: float | None = None
+
+    @property
+    def number_plate(self) -> str | None:
+        """Will get the number plate from an image of a car"""
+        if self._number_plate is None:
+            self._number_plate = self._get_number_plate()
+        return self._number_plate
+
+    def _get_number_plate(self) -> NumberPlate:
+        """Find the number plate on the car and return NumberPlate obj"""
+        results = predict(self.frame.arr, NUM_PLATE_MODEL)
+
+        number_plates = []
+        characters = []
+        for result in results:
+            for obj_name, boxes in result.items():
+                if obj_name == 'number-plates':
+                    for box in boxes:
+                        number_plate = NumberPlate(self.frame, box)
+                        print(number_plate.is_good)
+                        number_plates.append(number_plate)
+
+#                 elif obj_name == 'character':
+#                     for box in boxes:
+#                        characters.append(box)
+
+#         # Now add every character to every number plate and let the number plate sort it out
+#         for character_box in characters:
+#             for number_plate in number_plates:
+#                 number_plate.add_character_box(character_box)
+

@@ -13,6 +13,7 @@ fsspec==2024.3.1
 gitdb==4.0.11
 GitPython==3.1.43
 greenlet==3.0.3
+huggingface-hub==0.24.5
 idna==3.6
 iniconfig==2.0.0
 ipdb==0.13.13
@@ -47,6 +48,7 @@ pyav==12.0.2
 pyee==11.0.1
 Pygments==2.17.2
 pyparsing==3.1.1
+pytesseract==0.3.10
 pytest==8.0.0
 python-dateutil==2.8.2
 pytz==2023.4
@@ -70,7 +72,7 @@ traitlets==5.14.1
 types-python-dateutil==2.9.0.20240316
 typing_extensions==4.10.0
 tzdata==2023.4
-ultralytics==8.2.70
+ultralytics==8.2.71
 ultralytics-thop==2.0.0
 undetected-playwright==0.2.0
 urllib3==2.2.1
