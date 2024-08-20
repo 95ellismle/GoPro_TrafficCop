@@ -12,6 +12,28 @@ from src.data_types import (
 )
 
 
+def contrast_boost(img: np.ndarray):
+    """Normalize numbers between 0 -> 255 and apply clahe to the image
+
+    N.B:
+        Must be a grayscale image
+    """
+    clahe = cv2.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
+    img = np.float64(img)
+
+    min_ = img.min()
+    if min_ > 1e-5:
+        img -= min_
+
+    max_ = img.max()
+    if max_ < 249.9999:
+        img *= 255 / max_
+
+    img = clahe.apply(np.uint8(img.round()))
+
+    return img
+
+
 def apply_threshold(img_arr: np.ndarray,
                     thresholds: dict) -> np.ndarray:
     """Will apply a dictionary of thresholds to the image array.

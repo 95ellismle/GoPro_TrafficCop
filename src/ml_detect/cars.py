@@ -2,6 +2,7 @@ import cv2 as cv
 from datetime import(datetime as datetime_type)
 from pathlib import Path
 import numpy as np
+import matplotlib.pyplot as plt
 import pytesseract
 
 from src.data_types import PredictedColor, Image
@@ -13,9 +14,12 @@ from src.cv_detect.colors import (
     get_color_segmentations,
     create_color_pallette
 )
+from src.cv_detect.common import (
+    contrast_boost
+)
+
 
 COUNT = 0
-CHARACTERS = []
 
 
 class NumberPlate(BaseObject):
@@ -45,7 +49,7 @@ class NumberPlate(BaseObject):
         if self._light_color_pallette is not None:
             return self._light_color_pallette
 
-        img = self.frame.copy()
+        img = self.cleaned_frame.copy()
 
         # Zoom into the center and get the color pallette for it
         shape = img.shape
@@ -157,72 +161,151 @@ class NumberPlate(BaseObject):
 
     @property
     def cleaned_frame(self):
-        """Get colors that are pretty close to the color pallette"""
-        global CHARACTERS
-        if self._cleaned_frame is not None:
-            return self._cleaned_frame
+        """We tidy the frame image and try to increase the contrast between background and number plate characters.
 
-        self.frame = Image(
-            cv.bilateralFilter(self.frame.arr,
-                               d=9,
-                               sigmaColor=50,
-                               sigmaSpace=50)
-        )
+        This is slightly different for white and yellow images, but they both do the following:
+            1) Identify the number plate background by using colors &/or lightness gradients etc..
+            2) Remove background objects by blacking them out
+            3) Find any characters and reduce their lightness
+            4) Find any background and increase its lightness
+            5) Find the min area bounding box around the number plate and rotate so it's long axis is parallel with the x axis
+        """
+        if self._cleaned_frame is not None: return self._cleaned_frame
 
-        mask = np.zeros(self.frame.shape, dtype=np.uint8)
-        frame_copy = self.frame.copy()
+        self._cleaned_frame = Image(cv.bilateralFilter(self.frame.arr, d=9, sigmaColor=50, sigmaSpace=50))
+        mask = np.zeros(self.frame.shape[:2], dtype=np.uint8)
+        frame_copy = self.frame.copy().astype(np.float64)
+        colors = self.number_plate_color_pallette
+
         if self.number_plate_color == 'yellow':
-            colors = self.number_plate_color_pallette
             hsv_colors = cv.cvtColor(np.array([colors]), cv.COLOR_RGB2HSV)[0]
             img = cv.cvtColor(self.frame.arr, cv.COLOR_RGB2HSV)
             for color in hsv_colors:
-                #dist = np.linalg.norm(self.frame.arr - color, axis=2)
                 dist = img - color
-                dist = (
-                        (0.7  * dist[:, :, 0])
+                dist = ((0.7  * dist[:, :, 0])
                       + (0.15 * dist[:, :, 1])
-                      + (0.05 * dist[:, :, 2])
-                )
-                mask[dist < 14] = [255, 255, 255]
-            gray = 1 - (np.std(frame_copy, axis=2) / 120.2)
-            yellow = 1 - (frame_copy[:, :, :2].std(axis=2) / 127.5)
-            mask[gray > 0.85] = [0, 0, 0]
-            mask[yellow < 0.8] = [0, 0, 0]
-            if mask.sum() == 0:
-                mask = np.ones_like(self.frame.shape) * 255
+                      + (0.05 * dist[:, :, 2]))
+                mask[dist < 18] = 255  # pick out any colors close to the color pallette
+            gray = contrast_boost(1 - (np.std(frame_copy, axis=2) / 120.2))
+            black = contrast_boost((255. - frame_copy).max(axis=2))
+            mask[gray > 150] = 0  # Remove gray colored pixels
+
+            lightness = contrast_boost(cv.cvtColor(np.uint8(frame_copy),
+                                                   cv.COLOR_RGB2LAB)[:,:,0])
+            mask[lightness < 100] = 0  # Remove very dark colored pixels
+            hue = img[:,:,0]
+            mask[hue > 27] = 0  # Remove any non-yellow colored pixels
+            mask[hue < 17] = 0
+
+            if mask.sum() == 0: mask = np.ones_like(self.frame.shape[:2]) * 255
 
         else:
+            import ipdb; ipdb.set_trace()
             ...
 
+        clahe = cv.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
         if self.number_plate_color == 'yellow':
-            global COUNT
-            out_dir = Path("/Users/mattellis/Projects/GoProCam/storage/img/num_plate_tidying/out");  out_dir.mkdir(exist_ok=True)
-            filepath = out_dir / f"{COUNT}.jpg"
-            COUNT += 1
-
-            min_area_rect = cv.minAreaRect(cv.findNonZero(mask[:,:,0]))
+            # Get the angle of rotation and black-out any non-number plate
+            min_area_rect = cv.minAreaRect(cv.findNonZero(mask))
             rotated_bounding_box = np.int0(cv.boxPoints(min_area_rect))
             new_mask = np.zeros(self.frame.shape[:2], dtype=np.uint8)
             cv.drawContours(new_mask, [rotated_bounding_box], 0, 255, -1)
             new_mask = cv.dilate(new_mask, np.ones((3,3),dtype=np.uint8)).astype(np.bool_)
-            final = self.frame.copy()
+            final = frame_copy
+
+            # Apply rotated bounding box around image
+            final = cv.bilateralFilter(final, d=9, sigmaColor=50, sigmaSpace=50)
             final[~new_mask] = [0,0,0]
+
+            black = contrast_boost(255 - final.max(axis=2))
+            yellow = contrast_boost(final[:, :, :2].std(axis=2))
+            lightness = contrast_boost(cv.cvtColor(final, cv.COLOR_RGB2LAB)[:, :, 0])
+            yel_col = (lightness*0.6) + (yellow*0.4) - np.float64(black)
+            yel_col_orig = yel_col.copy()
+            yel_col -= yel_col.min()
+            yel_col *= 255. / yel_col.max()
+            yel_col[yel_col < 100] = 0
+            yel_col = np.uint8(yel_col.round())
+
+            m = self.number_plate_color_pallette.mean(axis=0)
+            # if COUNT >= 13:
+            #     import ipdb; ipdb.set_trace()
+
+            print(m[:2].mean() - m[2])
+
+            yel_col[gray > 242] = 0
+            yel_col_thres = cv.adaptiveThreshold(np.uint8(yel_col.round()),
+                                                 255,
+                                                 cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                                 cv.THRESH_BINARY,
+                                                 15,
+                                                 2)
 
             angle = -min_area_rect[2]
             if min_area_rect[1][0] < min_area_rect[1][1]:
                 angle = 90 + angle
             M = cv.getRotationMatrix2D(min_area_rect[0],-angle, 1)
             final = cv.warpAffine(final, M, self.frame.shape[:2][::-1])
+            yel_col_thres = cv.warpAffine(yel_col_thres, M, self.frame.shape[:2][::-1])
 
-            if COUNT == 2:
-                import ipdb; ipdb.set_trace()
-                o=1
+            def create_filepath(filepath, new_dir):
+                dir_ = filepath.parent / new_dir
+                dir_.mkdir(exist_ok=True)
+                return dir_ / filepath.name
 
-            clahe = cv.createCLAHE(clipLimit=5.0, tileGridSize=(8,8))
-            final = cv.cvtColor(final[:], cv.COLOR_RGB2GRAY)
-            final = clahe.apply(final)
-            final = cv.bilateralFilter(final, d=9, sigmaColor=50, sigmaSpace=50)
-            Image(final).save(filepath)
+            # Flood fill edges in black
+            factor = yel_col_thres
+            factor[factor < 100] = 0
+            factor[factor >= 100] = 255
+            h, w = factor.shape
+            orig_mean = factor[int(h*0.4):int(h*0.6),int(w*0.4):int(w*0.6)].mean()
+            for x, y in ((0,...), (...,0), (len(factor)-1,...), (...,len(factor[0])-1)):
+                inds = np.argwhere(factor[x, y] == 255)
+                if len(inds) == 0: continue
+                next_ind = inds[0,0]
+                coords = (y, next_ind)
+                if y is ...:
+                    coords = (next_ind, x)
+
+                orig_factor = factor.copy()
+                factor = cv.floodFill(factor,
+                                      np.zeros((h+2, w+2), dtype=np.uint8),
+                                      coords,
+                                      0)[1]
+
+                # We don't want to be flood filling the center
+                # Just undo...
+                new_mean = factor[int(h*0.4):int(h*0.6),int(w*0.4):int(w*0.6)].mean()
+                if new_mean < orig_mean - 50:
+                    factor = orig_factor
+                    break
+
+            f = cv.cvtColor(final, cv.COLOR_RGB2HSV).astype(np.float64)
+            factor = cv.GaussianBlur(factor, (3,3), 15).astype(np.float64)
+            factor = contrast_boost(factor)
+
+            factor = np.float64(factor) - factor.min()
+            factor *= 2.67 / factor.max()
+            factor += 0.33
+
+            f[:, :, 2] *= factor
+            f[:,:,2] -= f.min()
+            f[:,:,2] *= 255 / f.max()
+            f = np.uint8(f.round())
+            f = cv.cvtColor(np.uint8(f.round()), cv.COLOR_HSV2RGB)
+
+            f[cv.dilate(factor, kernel=np.ones((3, 3), dtype=np.uint8)) < 1] = [0,0,0]
+
+            thresh_filepath = create_filepath(filepath, 'thresh')
+            non_thresh_filepath = create_filepath(filepath, 'increased_contrast')
+            increased_contrast_mask = create_filepath(filepath, 'increased_contrast_mask')
+
+            Image(final).save(create_filepath(filepath, 'no_mask'))
+            factor -= factor.min()
+            factor *= 255 / factor.max()
+            Image(np.uint8(factor)).save(thresh_filepath)
+            Image(f).save(increased_contrast_mask)
+
             self._cleaned_frame = Image(final)
         else:
             self._cleaned_frame = self.frame
