@@ -67,6 +67,7 @@ def get_color_segmentations(img: np.ndarray,
                                    cv.KMEANS_PP_CENTERS)
 
     # Remove any small clusters
+    ok_inds = list(range(N))
     if min_clust_size:
         if 0 < min_clust_size < 1:
             min_clust_size = len(flattened) * min_clust_size
@@ -85,9 +86,9 @@ def get_color_segmentations(img: np.ndarray,
         for i in ok_inds:
             mean = centers[i]
             all_colors = flattened[clust_groups[i]]
-            std = np.std(all_colors, axis=0) * 1.5
-            all_colors = all_colors[(all_colors > (mean - std)).all(axis=1) &
-                                    (all_colors < (mean + std)).all(axis=1)]
+            std = (np.std(all_colors, axis=0) * 1.5) + 1e-5
+            all_colors = all_colors[(all_colors >= (mean - std)).all(axis=1) &
+                                    (all_colors <= (mean + std)).all(axis=1)]
             centers[i] = np.median(all_colors, axis=0)
 
     centers = np.uint8(centers)

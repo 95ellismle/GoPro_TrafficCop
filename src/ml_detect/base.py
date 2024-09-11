@@ -14,13 +14,16 @@ class BaseObject:
     # cutout from original image
     frame: Image
 
-    def __init__(self, img: Image, box: np.ndarray):
+    def __init__(self, img: Image, box: np.ndarray | None = None):
         self.box = box
-        self.frame = self._calc_cutout(img, box)
+        self.frame = self._calc_cutout(img)
 
-    def _calc_cutout(self, img: Image, box: np.ndarray) -> Image | None:
+    def _calc_cutout(self, img: Image) -> Image | None:
         """Will cutout the car in the image with the specified box"""
-        rect = box.xyxy[0].astype(int)
+        if self.box is None:
+            return img
+
+        rect = self.box.xyxy[0].astype(int)
         return img[rect[1]:rect[3], rect[0]:rect[2]]
 
 
