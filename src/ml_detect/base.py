@@ -23,8 +23,19 @@ class BaseObject:
         if self.box is None:
             return img
 
-        rect = self.box.xyxy[0].astype(int)
-        return img[rect[1]:rect[3], rect[0]:rect[2]]
+        nrows, ncols = img.shape[0]-1, img.shape[1]-1
+        rect = self.box.xyxy[0].round().astype(np.intp)
+        if rect[0]<0:
+            rect[0] = 0
+        if rect[1]<0:
+            rect[1] = 0
+        if rect[2]>nrows:
+            rect[2] = nrows
+        if rect[3]>ncols:
+            rect[3] = ncols
+
+        img = img[rect[1]:rect[3], rect[0]:rect[2]]
+        return img
 
 
 def predict(img: Image,

@@ -16,10 +16,122 @@ from src.data_types import (
 ZERO_SHAPE_CONT = np.array([[[0, 0]], [[0, 6]], [[10, 6]], [[10, 0]]], dtype=np.int32)
 
 
+def snip_little_lines(img: np.ndarray,
+                      snip_size: tuple[int, int] = (2, 2)):
+    """Will perform a morphological open to cut away fine lines in a black and white imagw
+
+    Args:
+        img: black and white image
+        snip_size: How big a snip to perform on images
+    """
+    kernel = np.ones(snip_size, np.uint8)
+    snip_func = lambda i: cv.erode(i, kernel)
+
+    # If odd then don't shift, else shift by -1,-1
+    if snip_size[0] % 2 == 1 and snip_size[1] % 2 == 1:
+        return snip_func(img)
+
+    else:
+        shifter = (snip_size[0] % 2, snip_size[1] % 2)
+        new_img = np.zeros((img.shape[0]+shifter[0], img.shape[1]+shifter[1]),
+                           np.uint8)
+        new_img[:img.shape[0], :img.shape[1]] = img
+        new_img = snip_func(new_img)
+        return new_img[shifter[0]:, shifter[1]:]
+
+
+def rectangliness(img: np.ndarray):
+    """Get a score for how rectangular a contour is
+
+    Args:
+        img: A contour from findContours
+    """
+    import ipdb; ipdb.set_trace()
+    o=1
+
+
+def derivative_snipping(img: np.ndarray,
+                        threshold: float = 0.01,
+                        max_col_edge: float = 0.2,
+                        max_row_edge: float = 0.1):
+    """For a number of columns and rows and if there are any sections of white
+    lasting more than a threshold then fill them in.
+
+    Outline of algorithm:
+        1) get all rows/columns within a certain distance from the edge (default is 20%)
+        2) for each row/col iterate across the line with 2 pointers, if there is a chain of white pixels less than the (threshold * len of line) across: black them out.
+
+    Args:
+        img: bw, thresholded image. 2D array of either 0 or 255
+        threshold: max percentage of consequtive white pixels
+        max_col_edge: How far into each vertical edge to perform the snipping
+                        e.g: 0.1 would only do the snipping 10% in from the right & left
+        max_row_edge: How far into each horizontal edge to perform the snipping
+                        e.g: 0.1 would only do the snipping 10% in from the top & bottom
+    """
+    o_img = img.copy()
+    nrows, ncols = img.shape
+
+    # Do columns
+    thresh = round(ncols * threshold)
+    if thresh == 0: thresh = 1
+    if max_col_edge > 0.5: max_col_edge = 0.5
+    col_slice = int(ncols*max_col_edge)
+    cols_to_do = list(range(0, col_slice)) + list(range(ncols-col_slice, ncols))
+    for i in cols_to_do:
+        line = o_img[:, i]
+        pt1, pt2 = 0, 1
+        bad_inds = []
+        while pt2 < len(line):
+            if line[pt1] != line[pt2]:
+                if pt2 - pt1 <= thresh:
+                    bad_inds.extend(list(range(pt1, pt2)))
+                pt1 = pt2
+            pt2 += 1
+        if bad_inds:
+            img[bad_inds, i] = 0
+
+    # Do rows
+    thresh = round(nrows * threshold)
+    if thresh == 0: thresh = 1
+    if max_row_edge > 0.5: max_row_edge = 0.5
+    row_slice = int(nrows*max_row_edge)
+    rows_to_do = list(range(0, row_slice)) + list(range(nrows-row_slice, nrows))
+    for i in rows_to_do:
+        line = o_img[i, :]
+        pt1, pt2 = 0, 1
+        bad_inds = []
+        while pt2 < len(line):
+            if line[pt1] != line[pt2]:
+                if pt2 - pt1 <= thresh:
+                    bad_inds.extend(list(range(pt1, pt2)))
+                pt1 = pt2
+            pt2 += 1
+        if bad_inds:
+            img[i, bad_inds] = 0
+
+    return img
+
+
+def count_islands(img: np.ndarray,
+                  color: None | int = None):
+    """Count how many islands in a bw image that are of a certain shade
+
+    Args:
+        img: Black-white image
+        color: [optional] filter for only these colors
+    """
+    conts, _ = cv.findContours(img, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    import ipdb; ipdb.set_trace()
+
+
+
+
 def flood_fill_edges(img: np.ndarray,
                      fill_col: int = 0,
                      search_col: int = 255,
-                     center_tol: float = 0.9):
+                     center_tol: float = 0.9,
+                     max_change: int | None = None):
     """Will flood fill only the edges of a grayscale image with a value
 
     By default we color in white edges in black
@@ -60,6 +172,11 @@ def flood_fill_edges(img: np.ndarray,
             if (abs(new_mean - orig_mean) / orig_mean) >  (1-center_tol):
                 m_img = orig_img
                 continue
+
+            # If the image has changed color more than max_change, then undo operation
+            if max_change is None: continue
+            if m_img.sum() < (max_change * orig_img.sum()):
+                m_img = orig_img
     return m_img
 
 

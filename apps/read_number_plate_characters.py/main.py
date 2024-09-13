@@ -9,6 +9,10 @@ from src.cv_detect.common import (
     contrast_boost,
     remove_small_contours,
     flood_fill_edges,
+    snip_little_lines,
+    rectangliness,
+    count_islands,
+    derivative_snipping,
 )
 
 from storage import STORAGE_PATH
@@ -40,47 +44,14 @@ def main(image_numbers):
         print(f"{count}/{len(images)}")
         count += 1
 
-
-        if number_plate.number_plate_color == 'white':
-
-            cleaned_frame = number_plate.cleaned_frame.copy()
-            bw = cv.adaptiveThreshold(
-                                       cv.cvtColor(cleaned_frame, cv.COLOR_RGB2LAB)[:,:,0],
-                                       255,
-                                       cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                       cv.THRESH_BINARY,
-                                       15,
-                                       -3
-            )
-
-            ff = flood_fill_edges(bw)
-            ff = remove_small_contours(ff, 0.02)
-
-            kernel = np.ones((2,2), np.uint8)
-            ff = cv.dilate(cv.erode(ff, kernel), kernel)
-            ff = flood_fill_edges(remove_small_contours(ff, 0.005))
-
-            hsv = cv.cvtColor(cleaned_frame, cv.COLOR_RGB2HSV)
-
-            save_image(
-                    np.vstack((
-                        cleaned_frame,
-                        cv.cvtColor(contrast_boost(hsv[:,:,1]), cv.COLOR_GRAY2RGB),
-                        cv.cvtColor(ff, cv.COLOR_GRAY2RGB),
-                    )),
-                    "white_segments",
-                    img_fp.name
-            )
-
-
         rect = number_plate.bounding_box
         if rect is None:
             continue
 
         try:
             frame_shape = number_plate.cleaned_frame.shape
-            x, y = np.intp(np.array(frame_shape[:2]) / 20)
-            rect = ((rect[0][0], rect[0][1]-1), (rect[1][0]+x, rect[1][1]+y), rect[2])
+            x, y = np.array(frame_shape[:2]) / 15
+            rect = ((rect[0][0], rect[0][1]), (rect[1][0]+x, rect[1][1]+y), rect[2])
             points = np.intp(cv.boxPoints(rect))
             mask = np.ones_like(number_plate.cleaned_frame[:,:,0])
             cv.drawContours(mask, [points], -1, 0, -1)
@@ -98,8 +69,20 @@ def main(image_numbers):
 
         # Increase brightness and contrast
         cleaned_frame = cv.cvtColor(cleaned_frame, cv.COLOR_RGB2LAB)
-        cleaned_frame[:,:,0] = contrast_boost(cleaned_frame[:,:,0])
-        cleaned_frame = cv.cvtColor(cleaned_frame, cv.COLOR_LAB2RGB)
+        cleaned_frame[:,:,0] = contrast_boost(
+                cv.bilateralFilter(
+                    cleaned_frame[:,:,0],
+                    11,
+                    10,
+                    10)
+        )
+        cleaned_frame[:,:,0] = cv.bilateralFilter(
+                cleaned_frame[:,:,0],
+                15,
+                15,
+                15
+        )
+        cleaned_frame = cv.cvtColor(cleaned_frame[:,:,0], cv.COLOR_GRAY2RGB)
 
         _cleaned_frame = (
                 np.vstack((
