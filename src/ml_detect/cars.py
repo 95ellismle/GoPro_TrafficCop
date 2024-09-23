@@ -52,7 +52,10 @@ class NumberPlate(BaseObject):
     _number_plate_color_pallette: list[tuple[int, int, int]] | None = None
     _light_color_pallette: list[tuple[int, int, int]] | None = None
     _bounding_box: np.ndarray | None = None
+    _final_blobs: np.ndarray | None = None
     _rotation: float | None = None
+    _rotated_frame: np.ndarray | None = None
+    _final_frame: np.ndarray | None = None
 
     @property
     def characters(self):
@@ -68,7 +71,6 @@ class NumberPlate(BaseObject):
     @property
     def light_color_pallette(self):
         """Get the color pallete in the center of the image and remove any very dark colors"""
-        global COUNT
         if self._light_color_pallette is not None:
             return self._light_color_pallette
 
@@ -194,11 +196,29 @@ class NumberPlate(BaseObject):
                                                         cv.COLOR_HSV2RGB)[0]
         return self._number_plate_color_pallette
 
-    def _get_yellow_bounding_box(self):
-        """Will get the rotated rectangle representing the minimum area bounding box around the num plate
+    def _get_white_final_blobs(self):
+        """Get the final blobs that show roughly where the yellow number plate is"""
+        cleaned_frame = self.cleaned_frame.copy()
+        final = cv.adaptiveThreshold(
+                                   cv.cvtColor(cleaned_frame, cv.COLOR_RGB2LAB)[:,:,0],
+                                   255,
+                                   cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                   cv.THRESH_BINARY,
+                                   15,
+                                   -3
+        )
 
-        Uses the yellow color of the number plate to find it.
-        """
+        final = flood_fill_edges(final)
+        final = remove_small_contours(final, 0.02)
+
+        final = snip_little_lines(final, (2, 2))
+        final = derivative_snipping(final)
+        final = remove_small_contours(final, 0.005)
+        final = flood_fill_edges(final, max_change=0.8)
+        return final
+
+    def _get_yellow_final_blobs(self):
+        """Get the final blobs that show roughly where the yellow number plate is"""
         cleaned_frame = self.cleaned_frame.copy()
 
         hsv = cv.cvtColor(cleaned_frame, cv.COLOR_RGB2HSV)
@@ -224,39 +244,21 @@ class NumberPlate(BaseObject):
 
         final = yellow_hue.copy()
         final[grey == 0] = 0
+        return cv.cvtColor(final, cv.COLOR_RGB2GRAY)
 
-        try:
-            return cv.minAreaRect(cv.findNonZero(cv.cvtColor(final, cv.COLOR_RGB2GRAY)))
-        except:
-            return None
-
-    def _get_white_bounding_box(self):
-        """Will get the rotated rectangle representing the minimum area bounding box around the num plate
-
-        Uses the white color and geometric features to find the bounding box.
+    @property
+    def final_blobs(self):
+        """Will get the mask that defines the number plate, is not perfect though if a bounding box is
+        drawn around it, it mostly find the number plate.
         """
-        cleaned_frame = self.cleaned_frame.copy()
-        final = cv.adaptiveThreshold(
-                                   cv.cvtColor(cleaned_frame, cv.COLOR_RGB2LAB)[:,:,0],
-                                   255,
-                                   cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv.THRESH_BINARY,
-                                   15,
-                                   -3
-        )
+        if self._final_blobs is not None:
+            return self._final_blobs
 
-        final = flood_fill_edges(final)
-        final = remove_small_contours(final, 0.02)
-
-        final = snip_little_lines(final, (2, 2))
-        final = derivative_snipping(final)
-        final = remove_small_contours(final, 0.005)
-        final = flood_fill_edges(final, max_change=0.8)
-
-        try:
-            return cv.minAreaRect(cv.findNonZero(final))
-        except:
-            return None
+        if self.number_plate_color == 'yellow':
+            self._final_blobs = self._get_yellow_final_blobs()
+        elif self.number_plate_color == 'white':
+            self._final_blobs = self._get_white_final_blobs()
+        return self._final_blobs
 
     @property
     def bounding_box(self):
@@ -264,13 +266,13 @@ class NumberPlate(BaseObject):
         if self._bounding_box is not None:
             return self._bounding_box
 
-        if self.number_plate_color == 'yellow':
-            self._bounding_box = self._get_yellow_bounding_box()
-        elif self.number_plate_color == 'white':
-            self._bounding_box = self._get_white_bounding_box()
+        final = self.final_blobs
+        try:
+            self._bounding_box = cv.minAreaRect(cv.findNonZero(final, cv.COLOR_RGB2GRAY))
+        except:
+            return None
 
         return self._bounding_box
-
 
     @property
     def cleaned_frame(self):
@@ -289,7 +291,81 @@ class NumberPlate(BaseObject):
         cleaned_frame = cv.bilateralFilter(self.frame.arr, d=21, sigmaColor=15, sigmaSpace=15)
         cleaned_frame = segment_colors(cleaned_frame, 11)
 
-        return Image(cleaned_frame)
+        self._cleaned_frame = Image(cleaned_frame)
+
+        return self._cleaned_frame
+
+    @property
+    def rotation(self):
+        """Get the rotation of the number plate such that the long axis of the number plate aligns with the horizontal
+        axis of the image.
+        """
+        if self._rotation is not None:
+            return self._rotation
+
+        try:
+            _, _, self._rotation = cv.fitEllipse(cv.findNonZero(self.final_blobs))
+        except:
+            self._rotation = 90
+        self._rotation = 90 - self._rotation
+        return self._rotation
+
+    @property
+    def rotated_frame(self):
+        """Return the cleaned rotated number plate so the long axis of the number plate aligns with the horizontal axis
+        of the image.
+        """
+        global COUNT
+        if self._rotated_frame is not None:
+            return self._rotated_frame
+
+        rotation = self.rotation
+        rect = self.bounding_box
+        if rect is None:
+            self._rotated_frame = self.cleaned_frame
+            return self._rotated_frame
+
+        frame_shape = self.frame.shape
+
+        x, y = np.array(frame_shape[:2]) / 15
+        rect = ((rect[0][0], rect[0][1]), (rect[1][0]+x, rect[1][1]+y), rect[2])
+        points = np.intp(cv.boxPoints(rect))
+        mask = np.ones_like(self.frame[:,:,0])
+        cv.drawContours(mask, [points], -1, 0, -1)
+        mask = mask.astype(np.bool_)
+        fin = self.frame.copy()
+        fin[mask] = [0,0,0]
+
+
+        M = cv.getRotationMatrix2D(rect[0],-rotation, 1)
+        self._rotated_frame = cv.warpAffine(fin, M, frame_shape[:2][::-1])
+        return self._rotated_frame
+
+    @property
+    def final_frame(self):
+        """Will return the final frame: cleaned, rotated and cutout."""
+        if self._final_frame is not None:
+            return self._final_frame
+
+        new_img = cv.bilateralFilter(self.rotated_frame.copy(),
+                                     d=21,
+                                     sigmaSpace=11,
+                                     sigmaColor=11)
+        new_img = cv.cvtColor(new_img, cv.COLOR_RGB2LAB)
+        new_img[:,:,0] = contrast_boost(new_img[:,:,0])
+        new_img = cv.cvtColor(new_img, cv.COLOR_LAB2RGB)
+
+        sharpen_kern = np.array([[0, -0.5/4, 0],
+                                 [-0.5/4, 1.5, -0.5/4],
+                                 [0, -0.5/4, 0]])
+        new_img = cv.filter2D(new_img, ddepth=-1, kernel=sharpen_kern)
+        new_img = cv.bilateralFilter(new_img,
+                                     d=5,
+                                     sigmaSpace=17,
+                                     sigmaColor=17)
+        self._final_frame = new_img
+
+        return self._final_frame
 
 
 class Car(BaseObject):
@@ -320,6 +396,13 @@ class Car(BaseObject):
             for obj_name, boxes in result.items():
                 if obj_name == 'number-plates':
                     for box in boxes:
+                        w, h = box.xywh[0, [2,3]] // 20
+                        box.xyxy[0, 0] -= w
+                        box.xyxy[0, 2] += w
+                        box.xyxy[0, 1] -= h
+                        box.xyxy[0, 3] += h
+                        if box.xyxy[0,0] < 0: box.xyxy[0,0] = 0
+                        if box.xyxy[0,1] < 0: box.xyxy[0,1] = 0
                         number_plate = NumberPlate(self.frame, box)
                         number_plates.append(number_plate)
         return number_plates

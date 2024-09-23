@@ -44,53 +44,7 @@ def main(image_numbers):
         print(f"{count}/{len(images)}")
         count += 1
 
-        rect = number_plate.bounding_box
-        if rect is None:
-            continue
-
-        try:
-            frame_shape = number_plate.cleaned_frame.shape
-            x, y = np.array(frame_shape[:2]) / 15
-            rect = ((rect[0][0], rect[0][1]), (rect[1][0]+x, rect[1][1]+y), rect[2])
-            points = np.intp(cv.boxPoints(rect))
-            mask = np.ones_like(number_plate.cleaned_frame[:,:,0])
-            cv.drawContours(mask, [points], -1, 0, -1)
-            mask = mask.astype(np.bool_)
-            fin = number_plate.frame.copy()
-            fin[mask] = [0,0,0]
-
-            angle = -rect[2]
-            if rect[1][0] < rect[1][1]:
-                angle = 90 + angle
-            M = cv.getRotationMatrix2D(rect[0],-angle, 1)
-            cleaned_frame = cv.warpAffine(fin, M, frame_shape[:2][::-1])
-        except:
-            print("No number plate found!")
-
-        # Increase brightness and contrast
-        cleaned_frame = cv.cvtColor(cleaned_frame, cv.COLOR_RGB2LAB)
-        cleaned_frame[:,:,0] = contrast_boost(
-                cv.bilateralFilter(
-                    cleaned_frame[:,:,0],
-                    11,
-                    10,
-                    10)
-        )
-        cleaned_frame[:,:,0] = cv.bilateralFilter(
-                cleaned_frame[:,:,0],
-                15,
-                15,
-                15
-        )
-        cleaned_frame = cv.cvtColor(cleaned_frame[:,:,0], cv.COLOR_GRAY2RGB)
-
-        _cleaned_frame = (
-                np.vstack((
-                    number_plate.frame.arr,
-                    cleaned_frame))
-        )
-
-        save_image(_cleaned_frame,
+        save_image(number_plate.final_frame,
                    "segment_colors",
                    img_fp.name)
 

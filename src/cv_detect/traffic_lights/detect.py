@@ -79,8 +79,6 @@ def detect_black_traffic_light_structures(img: Image):
     #     x1,y1,x2,y2 = line[0]
     #     cv2.line(img.arr,(x1,y1),(x2,y2),(0,255,0),2)
 
-    Image(img.arr).show()
-    Image(img_arr).show()
     import ipdb; ipdb.set_trace()
 
 

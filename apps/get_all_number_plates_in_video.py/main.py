@@ -26,11 +26,11 @@ def main(video_file, start_frame):
 
     for frame in read_360_video(video_file, start_frame):
         print("\r"f"Frame: {frame.frame_number}       ", end="\r")
-        for view in ('front',# 'rear',
-                      #'front_bottom', 'front_top',
-                      #'rear_bottom', 'rear_top',
-                      #'rear_right', 'rear_left',
-                      #'front_right', 'front_left',
+        for view in ('front', 'rear',
+                     'front_bottom', 'front_top',
+                     'rear_bottom', 'rear_top',
+                     'rear_right', 'rear_left',
+                     'front_right', 'front_left',
                      ):
 
             frame_img = getattr(frame, view)
@@ -39,7 +39,6 @@ def main(video_file, start_frame):
             all_hash_vals = {int(i.stem.split('_')[0])
                              for i in DATA_DIR.glob('*_car_*.jpg')}
 
-            count = 0
             for car in cars.extract():
                 img_shape = car.frame.arr.shape
                 if img_shape[0] < 200 or img_shape[1] < 200:
