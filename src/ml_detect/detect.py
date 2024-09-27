@@ -5,6 +5,7 @@ from src.ml_detect.base import BaseObject, predict
 from src.ml_detect.constants import (
     DEVICE,
     YOLOV10_MODEL,
+    CHARACTER_MODEL,
     NUM_PLATE_MODEL,
     MODEL_TYPE,
 )
@@ -15,7 +16,7 @@ from src.data_types import Image
 class Detect:
     _obj_map: dict[str, tuple[Any, MODEL_TYPE]] = {
         'number-plates':  (NumberPlate, NUM_PLATE_MODEL),
-        'character':      (BaseObject, NUM_PLATE_MODEL),
+        # 'character':      (Character,  CHARACTER_MODEL),
         'car':            (Car,        YOLOV10_MODEL),
         'person':         (BaseObject, YOLOV10_MODEL),
         'bicycle':        (BaseObject, YOLOV10_MODEL),
@@ -120,7 +121,8 @@ class Detect:
 
         self.ret_obj, self.model = self._obj_map[name]
 
-    def extract(self, conf: float = 0.45,
+    def extract(self,
+                conf: float = 0.45,
                 name: str | None = None,
                 device: str | None = DEVICE):
         """Extract results and yield them

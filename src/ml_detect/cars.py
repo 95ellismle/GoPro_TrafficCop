@@ -8,7 +8,7 @@ from typing import Iterator
 
 from src.data_types import PredictedColor, Image
 from src.ml_detect.base import BaseObject, predict
-from src.ml_detect.constants import NUM_PLATE_MODEL
+from src.ml_detect.constants import NUM_PLATE_MODEL, CHARACTER_MODEL
 
 from src.cv_detect.colors import (
     segment_colors,
@@ -45,7 +45,7 @@ class NumberPlate(BaseObject):
         3) Smooth image
     """
     # Derived quantities
-    _characters: tuple[str] | None = None
+    _characters: str | None = None
     _cleaned_frame: Image | None = None
     _detected_characters: list | None = None
     _number_plate_color: str | None = None
@@ -63,10 +63,14 @@ class NumberPlate(BaseObject):
         if self._characters is not None:
             return self._characters
 
-        img = self.cleaned_frame
-        path_to_tess_bin = "/opt/homebrew/bin/tesseract"
-        pytesseract.pytesseract.tesseract_cmd = path_to_tess_bin
-        return pytesseract.image_to_string(img.img)
+        img = self.final_frame
+        results = predict(img, CHARACTER_MODEL, conf=0.2)
+
+        # Sort chars so they read from left to right
+        results = sorted([(v[0].xywh[0,0], k)
+                          for k,v in results[0].items()])
+        self._characters = ''.join([i[1] for i in results])
+        return self._characters
 
     @property
     def light_color_pallette(self):
@@ -391,7 +395,6 @@ class Car(BaseObject):
         results = predict(self.frame.arr, NUM_PLATE_MODEL)
 
         number_plates = []
-        characters = []
         for result in results:
             for obj_name, boxes in result.items():
                 if obj_name == 'number-plates':

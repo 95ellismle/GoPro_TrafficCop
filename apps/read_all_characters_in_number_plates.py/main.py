@@ -43,7 +43,7 @@ def main(video_file, start_frame):
                 for number_plate in car.number_plates:
                     COUNT += 1
 
-                    save_image(number_plate.frame.arr, "original")
+                    characters = number_plate.characters
 
 
 @click.command()

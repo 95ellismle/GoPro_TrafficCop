@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import gpmf
 import av
 import numpy as np
 from typing import Iterator
@@ -9,7 +10,8 @@ from go_pro.data_types import Img360
 
 def split_360(
         container: av.video.frame.VideoFrame,
-        min_time: int | None = None
+        min_time: int | None = None,
+        metadata: list | None = None,
     ) -> Iterator[Img360]:
     """Split a GoPro max 360 image into front, rear, sides, top and bottom images and return all in a tuple.
 
@@ -43,8 +45,16 @@ def split_360(
             break
 
 
-def read_360_video(filepath: Path, min_time: int) -> Iterator[Img360]:
+def read_360_video(filepath: Path,
+                   min_time: int,
+                   read_metadata: bool = True) -> Iterator[Img360]:
     """Load a 360 video and return a stream of frames"""
     with av.open(filepath) as container:
-        for frame in split_360(container, min_time):
+        # Read metadata if required
+        metadata = None
+        if read_metadata:
+            stream = gpmf.io.extract_gpmf_stream(str(filepath))
+            metadata = gpmf.parse.expand_klv(stream)
+
+        for frame in split_360(container, min_time, metadata):
             yield frame

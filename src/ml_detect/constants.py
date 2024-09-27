@@ -10,4 +10,5 @@ DEVICE: str | None = "mps"
 
 YOLOV10_MODEL = YOLOv10(str(MODELS_PATH / 'yolov10l.pt'))
 NUM_PLATE_MODEL = YOLOv10(str(MODELS_PATH / 'num_plates_with_gopro_img.pt'))
+CHARACTER_MODEL = YOLOv10(str(MODELS_PATH / 'characters.pt'))
 

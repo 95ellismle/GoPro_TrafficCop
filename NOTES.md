@@ -69,3 +69,52 @@ E.g: in the graphic below imagine you are the line, lying on your side and the c
 1) Find red, yellow green circles. This can be done with HSV filtering, erosion/dilation to clean up and findContours. Compare area of contour to area of the minEnclosingCircle.
 
 2) Find corner features near each light. Probably first threshold black-ish objects (the traffic light box). Can also use FLANN: https://docs.opencv.org/4.x/db/d27/tutorial_py_table_of_contents_feature2d.html to find lights (though they may be rotated etc...).
+
+
+# 24/09/2024: Data Track
+The data track can be parsed with the `gpmf` library. If, upon importing, an 'probe not found' error is raised: do `pip uninstall python-ffmpeg` then `pip install ffmpeg-python`.
+
+The data track can be read via:
+
+```
+filepath: str = "/Users/mattellis/Downloads/GSX.mp4"
+stream = gpmf.io.extract_gpmf_stream(filepath)
+```
+
+To extract all the data within the track then the following can be used:
+```
+expanded_stream = gpmf.parse.expand_klv(stream)
+```
+
+Rough structure of `expanded_stream`:
+```
+[   # List of frames
+    [
+        # Metadata
+        "DEVC",
+        <KLVLength object -length of stream of data in frame>,
+
+        [
+            # Actual Data
+0           'DVID',  # Device ID
+1           'DVNM',  # Device Name
+2           'STRM',  # Acceleration
+3           'STRM',  # Gyroscope
+4           'STRM',  # Magnetometer
+5           'STRM',  # Shutter speed (exposure time)
+6           'STRM',  # White balance (in Kelvin)
+7           'STRM',  # White balance (in RGB Gain)
+8           'STRM',  # Sensor ISO
+9           'STRM',  # Image uniformity
+10          'STRM',  # GPS (Lat., Long., Alt., 2D speed, 3D speed)
+11          'STRM',  # Camera Orientation
+12          'STRM',  # Image Orientation
+13          'STRM',  # Disparity track
+14          'STRM',  # Gravity Vector
+15          'STRM',  # Wind processing
+16          'STRM',  # Mic wet
+17          'STRM',  # Audio level
+        ]
+]
+
+

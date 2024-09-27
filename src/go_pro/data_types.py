@@ -1,5 +1,7 @@
 import av
+import cv2 as cv
 import matplotlib.pyplot as plt
+import numpy as np
 
 from dataclasses import dataclass
 
@@ -7,7 +9,7 @@ from src.data_types import Image
 
 
 @dataclass
-class Img360:
+class RawImg360:
     frame_number: int
 
     # From stream 1
@@ -56,19 +58,106 @@ class Img360:
     def show_all(self):
         """Plot all images on 2 axes"""
         f, ((a1, a2, a3), (a4, a5, a6)) = plt.subplots(2, 3)
+        f.suptitle("Front")
         a1.imshow(self.front_top)
-        a2.imshow(self.rear_top)
-        a3.imshow(self.rear)
-        a4.imshow(self.rear_bottom)
+        a2.imshow(self.front_left)
+        a3.imshow(self.front)
+        a4.imshow(self.front_right)
         a5.imshow(self.front_bottom)
         f.tight_layout()
 
         g, ((a21, a22, a23), (a24, a25, a26)) = plt.subplots(2, 3)
-        a21.imshow(self.front_left)
+        g.suptitle("Rear")
+        a21.imshow(self.rear_top)
         a22.imshow(self.rear_left)
-        a23.imshow(self.front)
+        a23.imshow(self.rear)
         a24.imshow(self.rear_right)
-        a25.imshow(self.front_right)
+        a25.imshow(self.rear_bottom)
         g.tight_layout()
         plt.show()
+
+
+class Img360:
+    boundary: int = 32
+
+    raw: RawImg360 # Raw image
+
+    # Stitched frames
+    front: Image
+    rear: Image
+    right: Image
+    left: Image
+    top: Image
+    bottom: Image
+
+    def __init__(self,
+                 frame_fronts: av.video.frame.VideoFrame,
+                 frame_rears: av.video.frame.VideoFrame):
+        """First extract the raw frames and store as a RawImg360, then stitch these raw frames together to make a seamless cube"""
+        self.raw = RawImg360(frame_fronts, frame_rears)
+
+        self.front = self.raw.front
+        self.rear = self.raw.rear
+
+        self.top = self.stitch_top()
+        self.bottom = self.stitch_bottom()
+        self.right = self.stitch_right()
+        self.left = self.stitch_left()
+
+    def stitch_top(self):
+        top = np.vstack(
+                (self.raw.front_top[:-self.boundary],
+                 self.raw.rear_top[self.boundary:])
+        )
+        return Image(top)
+
+    def stitch_bottom(self):
+        bottom = np.vstack(
+                (self.raw.rear_bottom[:-self.boundary],
+                 self.raw.front_bottom[self.boundary:])
+        )
+        return Image(bottom)
+
+    def stitch_right(self):
+        right = np.hstack(
+                (self.raw.front_right[:, :-self.boundary],
+                 self.raw.rear_right[:, self.boundary:])
+        )
+        return Image(right)
+
+    def stitch_left(self):
+        left = np.hstack(
+                (self.raw.rear_left[:, :-self.boundary],
+                 self.raw.front_left[:, self.boundary:])
+        )
+        return Image(left)
+
+    @property
+    def frame_number(self) -> int:
+        return self.raw.frame_number
+
+    @frame_number.setter
+    def frame_number(self, frame_number: int):
+        self.raw.frame_number = frame_number
+
+    def show_all(self):
+        """Show all 6 faces of the cube"""
+        sml, lrg = self.top.shape[:2]
+        big_img = np.zeros((sml+lrg+sml,
+                            sml+lrg+sml+lrg,
+                            3),
+                           np.uint8)
+
+        diff = lrg-sml
+
+        big_img[sml:sml+lrg, :lrg] = self.front
+        big_img[sml:sml+lrg, lrg:lrg+sml] = self.right
+
+        big_img[sml:sml+lrg, lrg+sml:lrg+sml+lrg] = self.rear
+        big_img[sml:sml+lrg, lrg+sml+lrg:lrg+sml+lrg+sml] = self.left
+
+        big_img[-sml:, lrg+sml:lrg+lrg+sml] = self.bottom
+        big_img[:sml, lrg+sml:lrg+lrg+sml] = self.top
+
+        Image(big_img).show()
 
