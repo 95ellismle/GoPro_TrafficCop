@@ -109,14 +109,12 @@ def main(video_file,
 
 @click.command()
 @click.argument('video_file', type=click.Path(exists=True))
-@click.option('--start-frame', type=int, default=0)
 @click.option('--output-dir', type=click.Path(exists=True), required=True)
 def main_cli(video_file: Path,
-             start_frame: int,
              output_dir: Path):
     video_file = Path(video_file)
     output_dir = Path(output_dir)
-    main(video_file, start_frame, output_dir)
+    main(video_file, output_dir)
 
 
 if __name__ == '__main__':
