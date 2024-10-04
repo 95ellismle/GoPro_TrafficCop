@@ -138,7 +138,7 @@ def parse_gps_metadata(metadata):
 
 
 def read_360_video(filepath: Path,
-                   min_time: int,
+                   min_time: int | None = None,
                    read_metadata: bool = True) -> Iterator[Img360]:
     """Load a 360 video and return a stream of frames"""
     with av.open(filepath) as container:

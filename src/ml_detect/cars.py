@@ -3,7 +3,6 @@ from datetime import(datetime as datetime_type)
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-import pytesseract
 from typing import Iterator
 
 from src.data_types import PredictedColor, Image

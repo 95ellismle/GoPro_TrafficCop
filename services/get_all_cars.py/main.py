@@ -38,13 +38,12 @@ class img_writer:
 
 
 def main(video_file,
-         start_frame,
          output_dir):
     create_all_tables()
 
     video = None
     writer = None
-    for frame in read_360_video(video_file, start_frame):
+    for frame in read_360_video(video_file):
         frame_obs_time = frame.datetime
         if frame.frame_iter == 0:
             output_dir /= f"{video_file.name}-{frame_obs_time:%Y_%m_%d-%H_%M}"
@@ -109,12 +108,13 @@ def main(video_file,
 
 @click.command()
 @click.argument('video_file', type=click.Path(exists=True))
-@click.option('--output-dir', type=click.Path(exists=True), required=True)
+@click.option('--output_dir', type=click.Path(exists=True), required=True)
 def main_cli(video_file: Path,
              output_dir: Path):
     video_file = Path(video_file)
     output_dir = Path(output_dir)
-    main(video_file, output_dir)
+    main(video_file=video_file,
+         output_dir=output_dir)
 
 
 if __name__ == '__main__':
