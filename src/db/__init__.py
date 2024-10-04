@@ -18,8 +18,9 @@ from db.vehicles import (
     Vehicle,
 )
 
+from src.settings import sql_path
+
 _engine = None
-sql_path: str = "sqlite:///traffic_cop.db"
 
 
 def get_engine():

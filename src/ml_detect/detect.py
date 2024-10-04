@@ -2,8 +2,8 @@ from typing import Any
 from ultralytics.engine.results import Boxes
 
 from src.ml_detect.base import BaseObject, predict
+from src.settings import yolo_device as DEVICE
 from src.ml_detect.constants import (
-    DEVICE,
     YOLOV10_MODEL,
     CHARACTER_MODEL,
     NUM_PLATE_MODEL,

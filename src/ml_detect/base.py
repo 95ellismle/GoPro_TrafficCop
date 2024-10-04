@@ -2,9 +2,9 @@ import numpy as np
 
 from src.data_types import PredictedColor, Image
 from src.ml_detect.constants import (
-    DEVICE,
     MODEL_TYPE,
 )
+from src.settings import yolo_device as DEVICE
 
 
 class BaseObject:
