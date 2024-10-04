@@ -2,6 +2,7 @@ import av
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+import datetime
 
 from dataclasses import dataclass
 
@@ -11,6 +12,10 @@ from src.data_types import Image
 @dataclass
 class RawImg360:
     frame_number: int
+    datetime: datetime
+    video_time: float
+    frame_iter: int
+    metadata: dict
 
     # From stream 1
     rear_left: Image
@@ -131,6 +136,38 @@ class Img360:
                  self.raw.front_left[:, self.boundary:])
         )
         return Image(left)
+
+    @property
+    def frame_iter(self) -> int:
+        return self.raw.frame_iter
+
+    @frame_iter.setter
+    def frame_iter(self, frame_iter: int):
+        self.raw.frame_iter = frame_iter
+
+    @property
+    def datetime(self) -> int:
+        return self.raw.datetime
+
+    @datetime.setter
+    def datetime(self, datetime: int):
+        self.raw.datetime = datetime
+
+    @property
+    def metadata(self) -> int:
+        return self.raw.metadata
+
+    @metadata.setter
+    def metadata(self, metadata: int):
+        self.raw.metadata = metadata
+
+    @property
+    def video_time(self) -> int:
+        return self.raw.video_time
+
+    @video_time.setter
+    def video_time(self, video_time: int):
+        self.raw.video_time = video_time
 
     @property
     def frame_number(self) -> int:

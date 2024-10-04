@@ -16,7 +16,6 @@ from src.data_types import Image
 class Detect:
     _obj_map: dict[str, tuple[Any, MODEL_TYPE]] = {
         'number-plates':  (NumberPlate, NUM_PLATE_MODEL),
-        # 'character':      (Character,  CHARACTER_MODEL),
         'car':            (Car,        YOLOV10_MODEL),
         'person':         (BaseObject, YOLOV10_MODEL),
         'bicycle':        (BaseObject, YOLOV10_MODEL),

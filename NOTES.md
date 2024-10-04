@@ -88,7 +88,7 @@ expanded_stream = gpmf.parse.expand_klv(stream)
 
 Rough structure of `expanded_stream`:
 ```
-[   # List of frames
+[   # List of second snapshots (each index shows data for that second, e.g: 0 = data for 0->1 seconds)
     [
         # Metadata
         "DEVC",
@@ -116,5 +116,14 @@ Rough structure of `expanded_stream`:
 17          'STRM',  # Audio level
         ]
 ]
+```
 
 
+# 03/10/2024: System design
+Use a microservices architecture.
+
+To fill out data in a main `Vehicle` table. Only need to fill out the skeleton data (trivial data to retrieve e.g: observed_at, img_filepath, video_filepath, video_time, location).
+
+To fill in other columns have services that read this table and fill in any columns that are NULL.
+
+A similar idea can be used for incidents and other reporting. For example: say there are some rows in the Vehicle table that shows untaxed vehicles driving around, then incidents can be created for these and saved in the database. A separate service can be used to query the incident table to create email reports for me to check.

@@ -5,6 +5,14 @@ import click
 from src.data_types import Image
 from src.ml_detect.detect import Detect
 from src.go_pro.utils import read_360_video
+from src.db import (
+    session,
+    create_all_tables,
+    insert_no_conflict_create_query,
+)
+from src.db.vehicles import (
+    NumberPlate
+)
 
 from storage import STORAGE_PATH
 
@@ -23,6 +31,7 @@ def save_image(img: np.ndarray, dir_name: str):
 
 def main(video_file, start_frame):
     global COUNT
+    create_all_tables()
 
     for frame in read_360_video(video_file, start_frame):
         print("\r"f"Frame: {frame.frame_number}       ", end="\r")
@@ -44,6 +53,13 @@ def main(video_file, start_frame):
                     COUNT += 1
 
                     characters = number_plate.characters
+                    if characters == "": continue
+                    num_plate_query = insert_no_conflict_create_query(NumberPlate,
+                                                                      ["characters"],
+                                                                      characters=characters)
+                    with session() as sesh:
+                        sesh.execute(num_plate_query)
+                        sesh.commit()
 
 
 @click.command()
