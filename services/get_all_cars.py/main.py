@@ -1,6 +1,7 @@
 import datetime
 from pathlib import Path
 import numpy as np
+import time
 
 import click
 from src.data_types import Image
@@ -67,10 +68,12 @@ def main(video_file,
             )
 
         print("\r"f"Frame: {frame.frame_number}       ", end="\r")
-        for view in ('front', 'rear',
-                     'bottom', 'top',
-                     'right', 'left',):
+
+
+        t1 = time.time()
+        for view in ('front', 'rear', 'bottom', 'top', 'right', 'left',):
             frame_img = getattr(frame, view)
+            print(f"Running on {frame.frame_number}:{view}")
             cars = Detect(frame_img, 'car')
 
             for car in cars.extract():
@@ -104,6 +107,8 @@ def main(video_file,
                            'observed_at': frame_obs_time,
                            'video_time': frame.time},
                 )
+        print(f"Time taken: {time.time() - t1:.1f}s")
+        import ipdb; ipdb.set_trace()
 
 
 @click.command()

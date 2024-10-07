@@ -9,7 +9,7 @@ from models import MODELS_PATH
 MODEL_TYPE = yolo_model
 # MODEL_TYPE = yolo_v10_model | yolo_model
 
-YOLOV10_MODEL = YOLO(str(MODELS_PATH / 'yolov10l.pt'))
+YOLOV10_MODEL = YOLO(str(MODELS_PATH / 'yolo11m.pt'))  # yolov10l.pt'))
 NUM_PLATE_MODEL = YOLO(str(MODELS_PATH / 'num_plates_with_gopro_img.pt'))
 CHARACTER_MODEL = YOLO(str(MODELS_PATH / 'characters.pt'))
 

@@ -36,7 +36,7 @@ def predict(img: Image,
         results = [i.cpu() for i in
                    model.predict(img, conf=conf, device=device)]
     else:
-        results = mode.predict(img, conf=conf)
+        results = model.predict(img, conf=conf)
 
     all_res = []
     for result in results:
