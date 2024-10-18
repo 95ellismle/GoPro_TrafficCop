@@ -2,11 +2,15 @@ import datetime
 from pathlib import Path
 import numpy as np
 import time
+import cv2 as cv
 
 import click
 from src.data_types import Image
 from src.ml_detect.detect import Detect
 from src.go_pro.utils import read_360_video
+from src.go_pro.data_types import (
+    get_perspective_view_cubenet
+)
 from src.db import (
     session,
     create_all_tables,
@@ -45,6 +49,9 @@ def main(video_file,
     video = None
     writer = None
     for frame in read_360_video(video_file):
+        img_pers = get_perspective_view_cubenet(frame, depth=3, factor=0.5)
+        import ipdb; ipdb.set_trace()
+
         frame_obs_time = frame.datetime
         if frame.frame_iter == 0:
             output_dir /= f"{video_file.name}-{frame_obs_time:%Y_%m_%d-%H_%M}"
@@ -69,12 +76,18 @@ def main(video_file,
 
         print("\r"f"Frame: {frame.frame_number}       ", end="\r")
 
-
         t1 = time.time()
         for view in ('front', 'rear', 'bottom', 'top', 'right', 'left',):
-            frame_img = getattr(frame, view)
+            frame_img = getattr(frame, f"get_{view}_extra")(extra=0.2)
+
+            downscaled_img = cv.resize(frame_img.arr,
+                                       dsize=None,
+                                       fx=0.6, fy=0.6,
+                                       interpolation=cv.INTER_CUBIC)
+            downscaled_img = Image(downscaled_img)
+
             print(f"Running on {frame.frame_number}:{view}")
-            cars = Detect(frame_img, 'car')
+            cars = Detect(downscaled_img, 'car')
 
             for car in cars.extract():
                 # Add image to DB

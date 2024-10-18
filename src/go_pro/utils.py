@@ -6,7 +6,7 @@ import av
 import numpy as np
 from typing import Iterator
 
-from go_pro.data_types import Img360
+from go_pro.data_types import Img360_Cube
 
 
 FRACS = [np.array([datetime.timedelta(seconds=i/j) for i in range(j)])
@@ -17,7 +17,7 @@ def split_360(
         container: av.video.frame.VideoFrame,
         min_time: int | None = None,
         metadata: list | None = None,
-    ) -> Iterator[Img360]:
+    ) -> Iterator[Img360_Cube]:
     """Split a GoPro max 360 image into front, rear, sides, top and bottom images and return all in a tuple.
 
     Args:
@@ -44,7 +44,7 @@ def split_360(
         try:
             dsf = next(decoded_stream_fronts)
             dsr = next(decoded_stream_rears)
-            img_360 = Img360(dsf, dsr)
+            img_360 = Img360_Cube(dsf, dsr)
             img_360.time = dsf.time
             img_360.metadata = get_metadata_for_time(metadata, img_360.time)
             img_360.datetime = img_360.metadata['gps']['datetime']
@@ -139,7 +139,7 @@ def parse_gps_metadata(metadata):
 
 def read_360_video(filepath: Path,
                    min_time: int | None = None,
-                   read_metadata: bool = True) -> Iterator[Img360]:
+                   read_metadata: bool = True) -> Iterator[Img360_Cube]:
     """Load a 360 video and return a stream of frames"""
     with av.open(filepath) as container:
         # Read metadata if required

@@ -167,3 +167,4 @@ cython_debug/
 
 # Runs
 nohup.*
+traffic_cop.db
